@@ -34,7 +34,7 @@ def _add_resources_cmd(ctx):
   for f in ctx.files.resources:
     c_dir, res_path = _adjust_resources_path(f.path)
     change_dir = "-C " + c_dir if c_dir else ""
-    res_cmd += "\n{jar} uf {out} " + change_dir + " " + res_path
+    res_cmd += "\n{jar} Muf {out} " + change_dir + " " + res_path
   return res_cmd
 
 def _build_nosrc_jar(ctx, buildijar):
@@ -48,7 +48,7 @@ def _build_nosrc_jar(ctx, buildijar):
 set -e
 # Make jar file deterministic by setting the timestamp of files
 touch -t 198001010000 {manifest}
-{jar} cmf {manifest} {out}
+{jar} cMmf {manifest} {out}
 """ + ijar_cmd + res_cmd
   cmd = cmd.format(
       out=ctx.outputs.jar.path,
@@ -138,7 +138,7 @@ env JAVACMD={java} {scalac} {jvm_flags} @{out}_args/args
 # Make jar file deterministic by setting the timestamp of files
 find {out}_tmp -exec touch -t 198001010000 {{}} \;
 touch -t 198001010000 {manifest}
-{jar} cmf {manifest} {out} -C {out}_tmp .
+{jar} cMmf {manifest} {out} -C {out}_tmp .
 rm -rf {out}_args
 rm -rf {out}_tmp
 rm -rf {out}_tmp_expand_srcjars
