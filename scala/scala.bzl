@@ -58,7 +58,7 @@ def _add_resources_cmd(ctx, dest):
 def _get_jar_path(paths):
     for p in paths:
         path = p.path
-        if path.endswith("/jar_deploy.jar"):
+        if path.endswith("/binary_deploy.jar"):
             return path
     return None
 
