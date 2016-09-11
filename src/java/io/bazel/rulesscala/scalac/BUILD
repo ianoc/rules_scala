@@ -7,6 +7,7 @@ java_binary(name = "scalac",
     "@scala//:lib/scala-reflect.jar",
     "@scala//:lib/scala-compiler.jar",
     "@scala//:lib/scala-xml_2.11-1.0.4.jar",
+    "//src/java/io/bazel/rulesscala/jar",
   ],
   visibility = ["//visibility:public"],
 )

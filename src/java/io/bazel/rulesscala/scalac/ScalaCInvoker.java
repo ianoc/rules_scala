@@ -30,6 +30,11 @@ import scala.tools.nsc.*;
 import java.io.*;
 import java.lang.reflect.Field;
 import scala.tools.nsc.reporters.ConsoleReporter;
+import java.util.Arrays;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.FileSystems;
+import io.bazel.rulesscala.jar.JarCreator;
 
 /**
  * A class for creating Jar files. Allows normalization of Jar entries by setting their timestamp to
@@ -37,9 +42,35 @@ import scala.tools.nsc.reporters.ConsoleReporter;
  */
 public class ScalaCInvoker {
 
+  public static String[] buildPluginArgs(String packedPlugins) {
+    //     plugin_arg = ""
+    // if (len(plugins) > 0):
+    //     plugin_arg = " ".join(["-Xplugin:%s" % p for p in plugins])
+
+
+    String[] result = {};
+
+    return result; // new String[](0);
+  }
+
+  public static String[] merge(String[]... arrays) {
+    int totalLength = 0;
+    for(String[] arr:arrays){
+      totalLength += arr.length;
+    }
+
+    String[] result = new String[totalLength];
+    int offset = 0;
+    for(String[] arr:arrays){
+      System.arraycopy(arr, 0, result, offset, arr.length);
+      offset += arr.length;
+    }
+    return result;
+  }
+
   public static void main(String[] args) {
     try {
-      // System.out.println("\n\n\n___ARGS_START____\n");
+      System.out.println("\n\n\n___ARGS_START____\n");
 
       if(args.length == 1 && args[0].indexOf("@") == 0) {
         String line;
@@ -48,9 +79,40 @@ public class ScalaCInvoker {
         line = in.readLine();
         args = line.split(" ");
       }
-     //  for (int i = 0; i < args.length; i++) {
-     //  System.out.println(args[i]);
-     //    }
+
+      String outputName = args[0];
+      String manifestPath = args[1];
+      String[] scalaOpts = args[2].split(",");
+      String[] pluginArgs = buildPluginArgs(args[3]);
+      String classpath = args[4];
+      String[] files = args[5].split(",");
+
+      args = Arrays.copyOfRange(args, 2, args.length);
+
+      Path outputPath = FileSystems.getDefault().getPath(outputName);
+      Path tmpPath = Files.createTempDirectory(outputPath.getParent(),"tmp");
+
+      System.out.println("Output path will be: " + outputName);
+      System.out.println("Manifest path will be: " + manifestPath);
+      System.out.println("tmpPath path will be: " + tmpPath);
+
+      String[] constParams = {
+        "-classpath",
+        classpath,
+        "-d",
+        tmpPath.toString()
+        };
+
+      String[] compilerArgs = merge(
+        scalaOpts,
+        pluginArgs,
+        constParams,
+        files);
+
+
+      for (int i = 0; i < compilerArgs.length; i++) {
+      System.out.println(compilerArgs[i]);
+        }
 
 
 
@@ -67,7 +129,7 @@ public class ScalaCInvoker {
      //  System.out.println("SASDF");
      //  System.out.println("SASDF");
   MainClass comp = new MainClass();
-  comp.process(args);
+  comp.process(compilerArgs);
 
 
   // System.out.println("SASDF");
@@ -81,6 +143,14 @@ public class ScalaCInvoker {
       reporter.flush();
   } else {
     // reportSuccess();
+    String[] jarCreatorArgs = {
+      "-m",
+      manifestPath,
+      outputPath.toString(),
+      tmpPath.toString()
+    };
+    JarCreator.buildJar(jarCreatorArgs);
+
     System.out.println("Success");
   }
 }
