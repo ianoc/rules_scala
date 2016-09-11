@@ -129,7 +129,7 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
 
   # Set up the args to pass to scalac because they can be too long for bash
   scalac_args_file = ctx.new_file(ctx.outputs.jar, ctx.label.name + "_scalac_args")
-  scalac_args = """{scala_opts} {plugin_arg} -classpath {scalalib}:{scalacompiler}:{jars} -d {out}_tmp {files}""".format(
+  scalac_args = """{scala_opts} {plugin_arg} -classpath {scalalib}:{scalacompiler}:{scalareflect}:{jars} -d {out}_tmp {files}""".format(
       scala_opts=" ".join(ctx.attr.scalacopts),
       scalalib=ctx.file._scalalib.path,
       scalacompiler=ctx.file._scalacompiler.path,
