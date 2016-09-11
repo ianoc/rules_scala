@@ -51,6 +51,13 @@ def _get_jar_path(paths):
       return path
   return None
 
+def _get_scalac_jar_path(paths):
+  for p in paths:
+    path = p.path
+    if path.endswith("/scalac_deploy.jar"):
+      return path
+  return None
+
 def _build_nosrc_jar(ctx, buildijar):
   cp_resources = _add_resources_cmd(ctx, "{out}_tmp".format(out=ctx.outputs.jar.path))
   ijar_cmd = ""
@@ -71,7 +78,7 @@ mkdir -p {out}_tmp
       out=ctx.outputs.jar.path,
       manifest=ctx.outputs.manifest.path,
       java=ctx.file._java.path,
-      jar=_get_jar_path(ctx.files._jar))
+      jar=_get_jar_path(ctx.files.__deploy_jar))
   outs = [ctx.outputs.jar]
   if buildijar:
     outs.extend([ctx.outputs.ijar])
@@ -79,7 +86,7 @@ mkdir -p {out}_tmp
       inputs=
           ctx.files.resources +
           ctx.files._jdk +
-          ctx.files._jar +
+          ctx.files.__deploy_jar +
           [ctx.outputs.manifest, ctx.file._java],
       outputs=outs,
       command=cmd,
@@ -122,8 +129,11 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
 
   # Set up the args to pass to scalac because they can be too long for bash
   scalac_args_file = ctx.new_file(ctx.outputs.jar, ctx.label.name + "_scalac_args")
-  scalac_args = """{scala_opts} {plugin_arg} -classpath "{jars}" -d {out}_tmp {files}""".format(
+  scalac_args = """{scala_opts} {plugin_arg} -classpath {scalalib}:{scalacompiler}:{jars} -d {out}_tmp {files}""".format(
       scala_opts=" ".join(ctx.attr.scalacopts),
+      scalalib=ctx.file._scalalib.path,
+      scalacompiler=ctx.file._scalacompiler.path,
+      scalareflect=ctx.file._scalareflect.path,
       plugin_arg = plugin_arg,
       jars=":".join([j.path for j in jars]),
       files=" ".join([f.path for f in sources]),
@@ -169,7 +179,7 @@ mkdir -p {out}_args
 touch {out}_args/files_from_jar
 mkdir -p {out}_tmp""" + srcjar_cmd + """
 cat {scalac_args} {out}_args/files_from_jar > {out}_args/scala_args
-env JAVACMD={java} {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
+{java} -jar {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
 # add any resources
 {cp_resources}
 {java} -jar {jar} -m {manifest} {out} {out}_tmp
@@ -181,7 +191,7 @@ rm -rf {out}_tmp_expand_srcjars
       cp_resources=cp_resources,
       java=ctx.file._java.path,
       jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
-      scalac=ctx.file._scalac.path,
+      scalac=_get_scalac_jar_path(ctx.files._scalac),
       scalac_args=scalac_args_file.path,
       out=ctx.outputs.jar.path,
       manifest=ctx.outputs.manifest.path,
@@ -199,11 +209,11 @@ rm -rf {out}_tmp_expand_srcjars
     ctx.files.plugins +
     ctx.files.resources +
     ctx.files._jdk +
+    ctx.files._scalac +
     ctx.files.__deploy_jar +
     ctx.files._scalasdk +
     [ctx.outputs.manifest,
       ctx.file._ijar,
-      ctx.file._scalac,
       ctx.file._java,
       scalac_args_file])
   if compile_java_srcs:
@@ -463,8 +473,10 @@ def _scala_test_impl(ctx):
 _implicit_deps = {
   "_ijar": attr.label(executable=True, default=Label("@bazel_tools//tools/jdk:ijar"), single_file=True, allow_files=True),
   "_scala": attr.label(executable=True, default=Label("@scala//:bin/scala"), single_file=True, allow_files=True),
-  "_scalac": attr.label(executable=True, default=Label("@scala//:bin/scalac"), single_file=True, allow_files=True),
+  "_scalac": attr.label(executable=True, default=Label("//src/java/io/bazel/rulesscala/scalac:scalac_deploy.jar"), allow_files=True),
   "_scalalib": attr.label(default=Label("@scala//:lib/scala-library.jar"), single_file=True, allow_files=True),
+  "_scalareflect": attr.label(default=Label("@scala//:lib/scala-reflect.jar"), single_file=True, allow_files=True),
+  "_scalacompiler": attr.label(default=Label("@scala//:lib/scala-compiler.jar"), single_file=True, allow_files=True),
   "_scalaxml": attr.label(default=Label("@scala//:lib/scala-xml_2.11-1.0.4.jar"), single_file=True, allow_files=True),
   "_scalasdk": attr.label(default=Label("@scala//:sdk"), allow_files=True),
   "_scalareflect": attr.label(default=Label("@scala//:lib/scala-reflect.jar"), single_file=True, allow_files=True),
