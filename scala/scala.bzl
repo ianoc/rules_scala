@@ -185,26 +185,26 @@ rm -rf {out}_tmp_expand_srcjars
       scalac_args=scalac_args_file.path,
       out=ctx.outputs.jar.path,
       manifest=ctx.outputs.manifest.path,
-      jar=_get_jar_path(ctx.files._jar),
+      jar=_get_jar_path(ctx.files.__deploy_jar),
       ijar=ctx.file._ijar.path,
     )
   outs = [ctx.outputs.jar]
   if buildijar:
     outs.extend([ctx.outputs.ijar])
-  ins = (list(jars) + 
-    list(dep_srcjars) + 
-    list(srcjars) + 
-    list(sources) + 
-    ctx.files.srcs + 
-    ctx.files.plugins + 
-    ctx.files.resources + 
-    ctx.files._jdk + 
-    ctx.files._jar + 
-    ctx.files._scalasdk + 
-    [ctx.outputs.manifest, 
-      ctx.file._ijar, 
-      ctx.file._scalac, 
-      ctx.file._java, 
+  ins = (list(jars) +
+    list(dep_srcjars) +
+    list(srcjars) +
+    list(sources) +
+    ctx.files.srcs +
+    ctx.files.plugins +
+    ctx.files.resources +
+    ctx.files._jdk +
+    ctx.files.__deploy_jar +
+    ctx.files._scalasdk +
+    [ctx.outputs.manifest,
+      ctx.file._ijar,
+      ctx.file._scalac,
+      ctx.file._java,
       scalac_args_file])
   if compile_java_srcs:
     ins.extend([javac_args_file])
@@ -242,11 +242,11 @@ def _build_deployable(ctx, jars):
 
   cmd = cmd.format(
       out=ctx.outputs.deploy_jar.path,
-      jar=_get_jar_path(ctx.files._jar),
+      jar=_get_jar_path(ctx.files.__deploy_jar),
       java=ctx.file._java.path,
       manifest=ctx.outputs.manifest.path)
   ctx.action(
-      inputs=list(jars) + ctx.files._jdk + ctx.files._jar + [ctx.outputs.manifest],
+      inputs=list(jars) + ctx.files._jdk + ctx.files.__deploy_jar + [ctx.outputs.manifest],
       outputs=[ctx.outputs.deploy_jar],
       command=cmd,
       mnemonic="ScalaDeployJar",
@@ -470,7 +470,7 @@ _implicit_deps = {
   "_scalareflect": attr.label(default=Label("@scala//:lib/scala-reflect.jar"), single_file=True, allow_files=True),
   "_java": attr.label(executable=True, default=Label("@bazel_tools//tools/jdk:java"), single_file=True, allow_files=True),
   "_javac": attr.label(executable=True, default=Label("@bazel_tools//tools/jdk:javac"), single_file=True, allow_files=True),
-  "_jar": attr.label(executable=True, default=Label("//src/java/io/bazel/rulesscala/jar:jar_deploy.jar"), allow_files=True),
+  "__deploy_jar": attr.label(executable=True, default=Label("//src/java/io/bazel/rulesscala/jar:jar_deploy.jar"), allow_files=True),
   "_jdk": attr.label(default=Label("//tools/defaults:jdk"), allow_files=True),
 }
 
