@@ -8,6 +8,8 @@ java_binary(name = "scalac",
     "@scala//:lib/scala-compiler.jar",
     "@scala//:lib/scala-xml_2.11-1.0.4.jar",
     "//src/java/io/bazel/rulesscala/jar",
+    "@io_bazel//src/main/protobuf:worker_protocol_java_proto",
+    "@io_bazel//third_party:guava",
   ],
   visibility = ["//visibility:public"],
 )

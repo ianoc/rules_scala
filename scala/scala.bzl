@@ -144,7 +144,7 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     all_srcjars = set(srcjars + list(dep_srcjars))
     # look for any plugins:
     plugins = _collect_plugin_paths(ctx.attr.plugins)
-    plugin_arg = ",".join(list(plugins))
+    plugin_arg = "Plugins: " + ",".join(list(plugins))
 
     # Set up the args to pass to scalac because they can be too long for bash
     scalac_args_file = ctx.new_file(ctx.outputs.jar, ctx.label.name + "_scalac_args")  # noqa
@@ -156,15 +156,17 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
         jars=":".join([j.path for j in jars]),
     )
 
-    #  these are args that our launcher app is going to consume
-    #  and will not be passed to scalac
-    pre_pargs = '{out} {manifest}'.format(
+    scalac_args = """
+{out}
+{manifest}
+{scala_opts}
+{plugin_arg}
+{cp}
+{files}
+""".format(
         out=ctx.outputs.jar.path,  # 0
         manifest=ctx.outputs.manifest.path,  # 1
-    )
-    scalac_args = """{pre_pargs} {scala_opts} {plugin_arg} {cp} {files}""".format(   # noqa
-        pre_pargs=pre_pargs,
-        scala_opts=",".join(ctx.attr.scalacopts),  # 2
+        scala_opts="ScalaOpts: " + ",".join(ctx.attr.scalacopts),  # 2
         plugin_arg=plugin_arg,  # 3
         cp=compiler_classpath,  # 4
         files=",".join([f.path for f in sources]),  # 5
@@ -193,38 +195,43 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
           javac=ctx.file._javac.path
           )
 
-    srcjar_cmd = ""
-    if len(all_srcjars) > 0:
-        srcjar_cmd = "\nmkdir -p {out}_tmp_expand_srcjars\n"
-        for srcjar in all_srcjars:
-            #  Note: this is double escaped because
-            #  we need to do one format call
-            #  per each srcjar, but then we are going to include
-            #  this in the bigger format
-            #  call that is done to generate the full command
+    # srcjar_cmd = ""
+    # if len(all_srcjars) > 0:
+    #     srcjar_cmd = "\nmkdir -p {out}_tmp_expand_srcjars\n"
+    #     for srcjar in all_srcjars:
+    #         #  Note: this is double escaped because
+    #         #  we need to do one format call
+    #         #  per each srcjar, but then we are going to include
+    #         #  this in the bigger format
+    #         #  call that is done to generate the full command
 
-            # TODO would like to be able to switch >/dev/null, -v,
-            # etc based on the user's settings
-            srcjar_cmd += """
-              unzip -o {srcjar} -d {{out}}_tmp_expand_srcjars >/dev/null
-              """.format(
-                        srcjar=srcjar.path)
-            srcjar_cmd += """find {out}_tmp_expand_srcjars """
-            srcjar_cmd += """-type f -name "*.scala"""
-            srcjar_cmd += """ > {out}_args/files_from_jar\n"""
+    #         # TODO would like to be able to switch >/dev/null, -v,
+    #         # etc based on the user's settings
+    #         srcjar_cmd += """
+    #           unzip -o {srcjar} -d {{out}}_tmp_expand_srcjars >/dev/null
+    #           """.format(
+    #                     srcjar=srcjar.path)
+    #         srcjar_cmd += """find {out}_tmp_expand_srcjars """
+    #         srcjar_cmd += """-type f -name "*.scala"""
+    #         srcjar_cmd += """ > {out}_args/files_from_jar\n"""
+# TODO ADD RESOURCES SUPPORT!
+#  # add any resources
+#  {cp_resources}
+
+# TODO add source jar support
+#   touch {out}_args/files_from_jar
+#   mkdir -p {out}_tmp""" + srcjar_cmd + """
+# {out}_args/files_from_jar
+
+    argfile = ctx.new_file(
+      ctx.configuration.bin_dir,
+      "%s_worker_input" % ctx.label.name
+    )
+    ctx.file_action(output=argfile, content=scalac_args)
 
     cmd = """
-  rm -rf {out}_args
-  rm -rf {out}_tmp
-  rm -rf {out}_tmp_expand_srcjars
-  set -e
-  mkdir -p {out}_args
-  touch {out}_args/files_from_jar
-  mkdir -p {out}_tmp""" + srcjar_cmd + """
-  cat {scalac_args} {out}_args/files_from_jar > {out}_args/scala_args
+  cat {scalac_args} > {out}_args/scala_args
   {java} -jar {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
-  # add any resources
-  {cp_resources}
   """ + ijar_cmd
     cmd = cmd.format(
         cp_resources=cp_resources,
@@ -237,6 +244,7 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
         jar=_get_jar_path(ctx.files.__deploy_jar),
         ijar=ctx.file._ijar.path,
       )
+
     outs = [ctx.outputs.jar]
     if buildijar:
         outs.extend([ctx.outputs.ijar])
@@ -254,18 +262,19 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
            [ctx.outputs.manifest,
             ctx.file._ijar,
             ctx.file._java,
-            scalac_args_file])
+            scalac_args_file,
+            argfile])
     if compile_java_srcs:
         ins.extend([javac_args_file])
     ctx.action(
         inputs=ins,
         outputs=outs,
-        command=cmd,
-        # executable=ctx.executable._scalac,
+        # command=cmd,
+        executable=ctx.executable._scalac,
         mnemonic="Scalac",
         progress_message="scala %s" % ctx.label,
         execution_requirements={"supports-workers": "1"},
-        arguments=["@" + ctx.outputs.jar.path + "_args/scala_args"],
+        arguments=["@" + argfile.path],
       )
 
 def _compile_or_empty(ctx, jars, srcjars, buildijar):
@@ -515,7 +524,7 @@ def _scala_test_impl(ctx):
 _implicit_deps = {
   "_ijar": attr.label(executable=True, default=Label("@bazel_tools//tools/jdk:ijar"), single_file=True, allow_files=True),
   "_scala": attr.label(executable=True, default=Label("@scala//:bin/scala"), single_file=True, allow_files=True),
-  "_scalac": attr.label(executable=True, default=Label("//src/java/io/bazel/rulesscala/scalac:scalac_deploy.jar"), allow_files=True),
+  "_scalac": attr.label(cfg=HOST_CFG, executable=True, default=Label("//src/java/io/bazel/rulesscala/scalac"), allow_files=True),
   "_scalalib": attr.label(default=Label("@scala//:lib/scala-library.jar"), single_file=True, allow_files=True),
   "_scalareflect": attr.label(default=Label("@scala//:lib/scala-reflect.jar"), single_file=True, allow_files=True),
   "_scalacompiler": attr.label(default=Label("@scala//:lib/scala-compiler.jar"), single_file=True, allow_files=True),
