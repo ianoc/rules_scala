@@ -43,8 +43,11 @@ def _add_resources_cmd(ctx, dest):
         c_dir, res_path = _adjust_resources_path(f.path)
         target_path = res_path
         if res_path[0] != "/":
-          target_path = "/" + res_path
-        res_cmd += "\nmkdir -p $(dirname {out_dir}{target_path})\ncp {c_dir}{res_path} {out_dir}{target_path}".format(
+            target_path = "/" + res_path
+        res_cmd += """
+          mkdir -p $(dirname {out_dir}{target_path})
+          cp {c_dir}{res_path} {out_dir}{target_path}
+        """.format(
             out_dir=dest,
             res_path=res_path,
             target_path=target_path,
@@ -59,72 +62,81 @@ def _get_jar_path(paths):
             return path
     return None
 
+
 def _get_scalac_jar_path(paths):
-  for p in paths:
-    path = p.path
-    if path.endswith("/scalac_deploy.jar"):
-      return path
-  return None
+    for p in paths:
+        path = p.path
+        if path.endswith("/scalac_deploy.jar"):
+            return path
+    return None
+
 
 def _build_nosrc_jar(ctx, buildijar):
-  cp_resources = _add_resources_cmd(ctx, "{out}_tmp".format(out=ctx.outputs.jar.path))
-  ijar_cmd = ""
-  if buildijar:
-    ijar_cmd = "\ncp {out} {ijar_out}".format(
-      out=ctx.outputs.jar.path,
-      ijar_out=ctx.outputs.ijar.path)
-  cmd = """
-rm -rf {out}_tmp
-set -e
-mkdir -p {out}_tmp
-# copy any resources
-{cp_resources}
-{java} -jar {jar} -m {manifest} {out}
-""" + ijar_cmd
-  cmd = cmd.format(
-      cp_resources=cp_resources,
-      out=ctx.outputs.jar.path,
-      manifest=ctx.outputs.manifest.path,
-      java=ctx.file._java.path,
-      jar=_get_jar_path(ctx.files.__deploy_jar))
-  outs = [ctx.outputs.jar]
-  if buildijar:
-    outs.extend([ctx.outputs.ijar])
-  ctx.action(
-      inputs=
-          ctx.files.resources +
-          ctx.files._jdk +
-          ctx.files.__deploy_jar +
-          [ctx.outputs.manifest, ctx.file._java],
-      outputs=outs,
-      command=cmd,
-      progress_message="scala %s" % ctx.label,
-      arguments=[])
+    cp_resources = _add_resources_cmd(ctx, "{out}_tmp".format(
+      out=ctx.outputs.jar.path)
+    )
+    ijar_cmd = ""
+    if buildijar:
+        ijar_cmd = "\ncp {out} {ijar_out}".format(
+          out=ctx.outputs.jar.path,
+          ijar_out=ctx.outputs.ijar.path)
+    cmd = """
+  rm -rf {out}_tmp
+  set -e
+  mkdir -p {out}_tmp
+  # copy any resources
+  {cp_resources}
+  {java} -jar {jar} -m {manifest} {out}
+  """ + ijar_cmd
+    cmd = cmd.format(
+        cp_resources=cp_resources,
+        out=ctx.outputs.jar.path,
+        manifest=ctx.outputs.manifest.path,
+        java=ctx.file._java.path,
+        jar=_get_jar_path(ctx.files.__deploy_jar))
+    outs = [ctx.outputs.jar]
+    if buildijar:
+        outs.extend([ctx.outputs.ijar])
+
+    inputs = ctx.files.resources + ctx.files._jdk + ctx.files.__deploy_jar + [
+      ctx.outputs.manifest, ctx.file._java
+      ]
+
+    ctx.action(
+        inputs=inputs,
+        outputs=outs,
+        command=cmd,
+        progress_message="scala %s" % ctx.label,
+        arguments=[])
+
 
 def _collect_plugin_paths(plugins):
-  paths = set()
-  for p in plugins:
-    if hasattr(p, "path"):
-      paths += [p.path]
-    elif hasattr(p, "scala"):
-      paths += [p.scala.outputs.jar.path]
-    elif hasattr(p, "java"):
-      paths += [j.class_jar.path for j in p.java.outputs.jars]
-    # support http_file pointed at a jar. http_jar uses ijar, which breaks scala macros
-    elif hasattr(p, "files"):
-      paths += [f.path for f in p.files]
-  return paths
+    paths = set()
+    for p in plugins:
+        if hasattr(p, "path"):
+            paths += [p.path]
+        elif hasattr(p, "scala"):
+            paths += [p.scala.outputs.jar.path]
+        elif hasattr(p, "java"):
+            paths += [j.class_jar.path for j in p.java.outputs.jars]
+        # support http_file pointed at a jar. http_jar uses ijar,
+        # which breaks scala macros
+        elif hasattr(p, "files"):
+            paths += [f.path for f in p.files]
+    return paths
 
 
 def _compile(ctx, _jars, dep_srcjars, buildijar):
     jars = _jars
-    cp_resources = _add_resources_cmd(ctx, "{out}_tmp".format(out=ctx.outputs.jar.path))
+    cp_resources = _add_resources_cmd(
+      ctx, "{out}_tmp".format(out=ctx.outputs.jar.path)
+      )
     ijar_cmd = ""
     if buildijar:
-      ijar_cmd = "\n{ijar} {out} {ijar_out}".format(
-        ijar=ctx.file._ijar.path,
-        out=ctx.outputs.jar.path,
-        ijar_out=ctx.outputs.ijar.path)
+        ijar_cmd = "\n{ijar} {out} {ijar_out}".format(
+          ijar=ctx.file._ijar.path,
+          out=ctx.outputs.jar.path,
+          ijar_out=ctx.outputs.ijar.path)
 
     java_srcs = _java_filetype.filter(ctx.files.srcs)
     sources = _scala_filetype.filter(ctx.files.srcs) + java_srcs
@@ -183,17 +195,23 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
 
     srcjar_cmd = ""
     if len(all_srcjars) > 0:
-      srcjar_cmd = "\nmkdir -p {out}_tmp_expand_srcjars\n"
-      for srcjar in all_srcjars:
-        # Note: this is double escaped because we need to do one format call
-        # per each srcjar, but then we are going to include this in the bigger format
-        # call that is done to generate the full command
+        srcjar_cmd = "\nmkdir -p {out}_tmp_expand_srcjars\n"
+        for srcjar in all_srcjars:
+            #  Note: this is double escaped because
+            #  we need to do one format call
+            #  per each srcjar, but then we are going to include
+            #  this in the bigger format
+            #  call that is done to generate the full command
 
-        #TODO would like to be able to switch >/dev/null, -v, etc based on the user's settings
-        srcjar_cmd += """
-  unzip -o {srcjar} -d {{out}}_tmp_expand_srcjars >/dev/null
-  """.format(srcjar = srcjar.path)
-      srcjar_cmd += """find {out}_tmp_expand_srcjars -type f -name "*.scala" > {out}_args/files_from_jar\n"""
+            # TODO would like to be able to switch >/dev/null, -v,
+            # etc based on the user's settings
+            srcjar_cmd += """
+              unzip -o {srcjar} -d {{out}}_tmp_expand_srcjars >/dev/null
+              """.format(
+                        srcjar=srcjar.path)
+            srcjar_cmd += """find {out}_tmp_expand_srcjars """
+            srcjar_cmd += """-type f -name "*.scala"""
+            srcjar_cmd += """ > {out}_args/files_from_jar\n"""
 
     cmd = """
   rm -rf {out}_args
@@ -221,24 +239,24 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
       )
     outs = [ctx.outputs.jar]
     if buildijar:
-      outs.extend([ctx.outputs.ijar])
+        outs.extend([ctx.outputs.ijar])
     ins = (list(jars) +
-      list(dep_srcjars) +
-      list(srcjars) +
-      list(sources) +
-      ctx.files.srcs +
-      ctx.files.plugins +
-      ctx.files.resources +
-      ctx.files._jdk +
-      ctx.files._scalac +
-      ctx.files.__deploy_jar +
-      ctx.files._scalasdk +
-      [ctx.outputs.manifest,
-        ctx.file._ijar,
-        ctx.file._java,
-        scalac_args_file])
+           list(dep_srcjars) +
+           list(srcjars) +
+           list(sources) +
+           ctx.files.srcs +
+           ctx.files.plugins +
+           ctx.files.resources +
+           ctx.files._jdk +
+           ctx.files._scalac +
+           ctx.files.__deploy_jar +
+           ctx.files._scalasdk +
+           [ctx.outputs.manifest,
+            ctx.file._ijar,
+            ctx.file._java,
+            scalac_args_file])
     if compile_java_srcs:
-      ins.extend([javac_args_file])
+        ins.extend([javac_args_file])
     ctx.action(
         inputs=ins,
         outputs=outs,
