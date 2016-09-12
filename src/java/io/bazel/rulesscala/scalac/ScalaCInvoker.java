@@ -56,8 +56,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map.Entry;
 import java.util.UUID;
-
-
+import scala.Console$;
 /**
  * A class for creating Jar files. Allows normalization of Jar entries by setting their timestamp to
  * the DOS epoch. All Jar entries are sorted alphabetically.
@@ -103,7 +102,8 @@ public class ScalaCInvoker {
         try (PrintStream ps = new PrintStream(baos)) {
           System.setOut(ps);
           System.setErr(ps);
-
+          Console$.MODULE$.setErrDirect(ps);
+          Console$.MODULE$.setOutDirect(ps);
           try {
             processRequest(request.getArgumentsList());
           } catch (Exception e) {
@@ -298,7 +298,7 @@ public class ScalaCInvoker {
       ConsoleReporter reporter = (ConsoleReporter) reporterField.get(comp);
 
       if (reporter.hasErrors()) {
-          // reportErrors(reporter);
+          reporter.printSummary();
           reporter.flush();
           throw new RuntimeException("Build failed");
       } else {
