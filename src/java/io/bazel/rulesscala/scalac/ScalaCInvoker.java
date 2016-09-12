@@ -109,6 +109,7 @@ return outputPaths;
     public int poisonAfter = 30;
   }
 
+  // Mostly lifted from bazel
   private static void runPersistentWorker(WorkerOptions workerOptions) throws IOException {
     PrintStream originalStdOut = System.out;
     PrintStream originalStdErr = System.err;
