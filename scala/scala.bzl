@@ -165,6 +165,7 @@ Files: {files}
 EnableIjar: {enableijar}
 ijarOutput: {ijar_out}
 ijarCmdPath: {ijar_cmd_path}
+SourceJars: {srcjars}
 """.format(
         out=ctx.outputs.jar.path,  # 0
         manifest=ctx.outputs.manifest.path,  # 1
@@ -175,6 +176,7 @@ ijarCmdPath: {ijar_cmd_path}
         enableijar=buildijar,
         ijar_out=ijar_output_path,
         ijar_cmd_path=ijar_cmd_path,
+        srcjars=",".join([f.path for f in all_srcjars]),
         )
     ctx.file_action(output=scalac_args_file, content=scalac_args)
     javac_sources_cmd = ""
@@ -199,9 +201,6 @@ ijarCmdPath: {ijar_cmd_path}
           javac_args=javac_args_file.path,
           javac=ctx.file._javac.path
           )
-    if len(all_srcjars) > 0:
-        print("Got source jars: " + ",".join(all_srcjars))
-
 
     # srcjar_cmd = ""
     # if len(all_srcjars) > 0:

@@ -62,6 +62,36 @@ import scala.Console$;
  * the DOS epoch. All Jar entries are sorted alphabetically.
  */
 public class ScalaCInvoker {
+  private static List<File> extractJar(String jarPath, String outputFolder) throws IOException, FileNotFoundException{
+    List<File> outputPaths = new ArrayList<File>();
+  java.util.jar.JarFile jar = new java.util.jar.JarFile(jarPath);
+java.util.Enumeration e = jar.entries();
+while (e.hasMoreElements()) {
+  java.util.jar.JarEntry file = (java.util.jar.JarEntry) e.nextElement();
+  java.io.File f = new java.io.File(outputFolder + java.io.File.separator + file.getName());
+
+  if (file.isDirectory()) { // if its a directory, create it
+    f.mkdirs();
+    continue;
+  }
+
+  File parent = f.getParentFile();
+  System.out.println("Mkdir:  " + parent);
+  parent.mkdirs();
+  outputPaths.add(f);
+
+  java.io.InputStream is = jar.getInputStream(file); // get the input stream
+  java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+  while (is.available() > 0) {  // write contents of 'is' to 'fos'
+    fos.write(is.read());
+  }
+  fos.close();
+  is.close();
+}
+return outputPaths;
+}
+
+
     // A UUID that uniquely identifies this running worker process.
   static final UUID workerUuid = UUID.randomUUID();
 
@@ -201,7 +231,8 @@ public class ScalaCInvoker {
         throw new RuntimeException("Bad arg, should have at most 1 space/2 spans. arg: " + line);
       }
       if(lSplit.length > 1) {
-        hm.put(lSplit[0].substring(0, lSplit[0].length() - 1), lSplit[1]);
+        String k = lSplit[0].substring(0, lSplit[0].length() - 1);
+        hm.put(k, lSplit[1]);
       }
     }
     return hm;
@@ -261,7 +292,33 @@ public class ScalaCInvoker {
       String[] scalaOpts = getOrEmpty(argMap, "ScalacOpts").split(",");
       String[] pluginArgs = buildPluginArgs(getOrEmpty(argMap, "Plugins"));
       String classpath = getOrError(argMap, "Classpath", "Must supply the classpath arg");
-      String[] files = getOrError(argMap, "Files", "Must supply files to operate on").split(",");
+      String[] files = getOrEmpty(argMap, "Files").split(",");
+      Path outputPath = FileSystems.getDefault().getPath(outputName);
+
+      String[] sourceJars = getOrEmpty(argMap, "SourceJars").split(",");
+      List<File> sourceFiles = new ArrayList<File>();
+
+      for(String jarPath : sourceJars) {
+        if(jarPath.length() > 0){
+          Path tmpPath = Files.createTempDirectory(outputPath.getParent(), "tmp");
+          sourceFiles.addAll(extractJar(jarPath, tmpPath.toString()));
+        }
+      }
+
+      int sourceFilesSize = sourceFiles.size();
+      String[] tmpFiles = new String[files.length + sourceFilesSize];
+      System.arraycopy(files, 0, tmpFiles, 0, files.length);
+      int baseIdx = files.length;
+      for(File p: sourceFiles) {
+        tmpFiles[baseIdx] = p.toString();
+        baseIdx += 1;
+      }
+      files = tmpFiles;
+
+      if(files.length == 0) {
+        throw new Exception("Must have input files from either source jars or local files.");
+      }
+
 
       boolean iJarEnabled = booleanGetOrFalse(argMap, "EnableIjar");
       String ijarOutput = null;
@@ -271,7 +328,6 @@ public class ScalaCInvoker {
        ijarCmdPath = getOrError(argMap, "ijarCmdPath", "Missing required arg ijarCmdPath when ijar enabled");
       }
 
-      Path outputPath = FileSystems.getDefault().getPath(outputName);
       Path tmpPath = Files.createTempDirectory(outputPath.getParent(),"tmp");
 
 
