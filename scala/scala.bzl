@@ -199,6 +199,9 @@ ijarCmdPath: {ijar_cmd_path}
           javac_args=javac_args_file.path,
           javac=ctx.file._javac.path
           )
+    if len(all_srcjars) > 0:
+        print("Got source jars: " + ",".join(all_srcjars))
+
 
     # srcjar_cmd = ""
     # if len(all_srcjars) > 0:
