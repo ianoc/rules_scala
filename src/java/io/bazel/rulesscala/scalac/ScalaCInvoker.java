@@ -31,6 +31,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -135,6 +136,62 @@ public class ScalaCInvoker {
     }
   }
 
+  static private String[] extractSourceJars(CompileOptions opts, Path tmpParent) throws IOException {
+    List<File> sourceFiles = new ArrayList<File>();
+
+    for(String jarPath : opts.sourceJars) {
+      if (jarPath.length() > 0){
+        Path tmpPath = Files.createTempDirectory(tmpParent, "tmp");
+        sourceFiles.addAll(extractJar(jarPath, tmpPath.toString()));
+      }
+    }
+    String[] files = appendToString(opts.files, sourceFiles);
+    if(files.length == 0) {
+      throw new RuntimeException("Must have input files from either source jars or local files.");
+    }
+    return files;
+  }
+
+  private static List<File> extractJar(String jarPath,
+      String outputFolder) throws IOException, FileNotFoundException {
+
+    List<File> outputPaths = new ArrayList<File>();
+    java.util.jar.JarFile jar = new java.util.jar.JarFile(jarPath);
+    java.util.Enumeration e = jar.entries();
+    while (e.hasMoreElements()) {
+      java.util.jar.JarEntry file = (java.util.jar.JarEntry) e.nextElement();
+      File f = new File(outputFolder + java.io.File.separator + file.getName());
+
+      if (file.isDirectory()) { // if its a directory, create it
+        f.mkdirs();
+        continue;
+      }
+
+      File parent = f.getParentFile();
+      parent.mkdirs();
+      outputPaths.add(f);
+
+      java.io.InputStream is = jar.getInputStream(file); // get the input stream
+      java.io.FileOutputStream fos = new java.io.FileOutputStream(f);
+      while (is.available() > 0) {  // write contents of 'is' to 'fos'
+        fos.write(is.read());
+      }
+      fos.close();
+      is.close();
+    }
+    return outputPaths;
+  }
+
+  static <T> String[] appendToString(String[] init, List<T> rest) {
+    String[] tmp = new String[init.length + rest.size()];
+    System.arraycopy(init, 0, tmp, 0, init.length);
+    int baseIdx = init.length;
+    for(T t : rest) {
+      tmp[baseIdx] = t.toString();
+      baseIdx += 1;
+    }
+    return tmp;
+  }
   public static String[] merge(String[]... arrays) {
     int totalLength = 0;
     for(String[] arr:arrays){
@@ -170,18 +227,20 @@ public class ScalaCInvoker {
       }
       CompileOptions ops = new CompileOptions(args);
 
+      Path outputPath = FileSystems.getDefault().getPath(ops.outputName);
+      Path tmpPath = Files.createTempDirectory(outputPath.getParent(), "tmp");
       String[] constParams = {
         "-classpath",
         ops.classpath,
         "-d",
-        ops.tmpPath.toString()
+        tmpPath.toString()
         };
 
       String[] compilerArgs = merge(
         ops.scalaOpts,
         ops.pluginArgs,
         constParams,
-        ops.files);
+        extractSourceJars(ops, outputPath.getParent()));
 
       MainClass comp = new MainClass();
       long start = System.currentTimeMillis();
@@ -199,8 +258,8 @@ public class ScalaCInvoker {
         String[] jarCreatorArgs = {
           "-m",
           ops.manifestPath,
-          ops.outputPath.toString(),
-          ops.tmpPath.toString()
+          outputPath.toString(),
+          tmpPath.toString()
         };
         JarCreator.buildJar(jarCreatorArgs);
 
