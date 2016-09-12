@@ -349,7 +349,12 @@ return outputPaths;
       // for(String arg: compilerArgs) {
       //   System.out.println("    " + arg);
       // }
+
+       long start = System.currentTimeMillis();
+
       comp.process(compilerArgs);
+      long stop = System.currentTimeMillis();
+      System.err.println("Compiler runtime: " + (stop - start) + "ms.");
 
       ConsoleReporter reporter = (ConsoleReporter) reporterField.get(comp);
 
