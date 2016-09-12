@@ -76,7 +76,6 @@ while (e.hasMoreElements()) {
   }
 
   File parent = f.getParentFile();
-  System.out.println("Mkdir:  " + parent);
   parent.mkdirs();
   outputPaths.add(f);
 
@@ -282,9 +281,9 @@ return outputPaths;
       }
 
       Map<String, String> argMap = buildArgMap(args);
-      for (Map.Entry<String, String> entry : argMap.entrySet()) {
-        System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
-      }
+      // for (Map.Entry<String, String> entry : argMap.entrySet()) {
+      //   System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
+      // }
 
       String outputName = getOrError(argMap, "JarOutput", "Missing required arg JarOutput");
       String manifestPath = getOrError(argMap, "Manifest", "Missing required arg Manifest");
@@ -345,10 +344,10 @@ return outputPaths;
         files);
 
       MainClass comp = new MainClass();
-      System.out.println("\n\n\n\nCompiler args:::");
-      for(String arg: compilerArgs) {
-        System.out.println("    " + arg);
-      }
+      // System.out.println("\n\n\n\nCompiler args:::");
+      // for(String arg: compilerArgs) {
+      //   System.out.println("    " + arg);
+      // }
       comp.process(compilerArgs);
 
       ConsoleReporter reporter = (ConsoleReporter) reporterField.get(comp);
@@ -372,9 +371,9 @@ return outputPaths;
           if(exitCode != 0) {
             throw new RuntimeException("ijar process failed!");
           }
-          System.out.println("exitCode = " + exitCode);
+          // System.out.println("exitCode = " + exitCode);
         }
-        System.out.println("Success");
+        // System.out.println("Success");
       }
   }
 
