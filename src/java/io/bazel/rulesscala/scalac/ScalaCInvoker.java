@@ -143,14 +143,23 @@ public class ScalaCInvoker {
 
 
   public static String[] buildPluginArgs(String packedPlugins) {
-    //     plugin_arg = ""
-    // if (len(plugins) > 0):
-    //     plugin_arg = " ".join(["-Xplugin:%s" % p for p in plugins])
+    String[] pluginElements = packedPlugins.split(",");
+    int numPlugins = 0;
+    for(int i =0; i< pluginElements.length; i++){
+      if(pluginElements[i].length() > 0) {
+        numPlugins += 1;
+      }
+    }
 
-
-    String[] result = {};
-
-    return result; // new String[](0);
+    String[] result = new String[numPlugins];
+    int idx = 0;
+    for(int i =0; i< pluginElements.length; i++){
+      if(pluginElements[i].length() > 0) {
+        result[idx] = "-Xplugin:" + pluginElements[i];
+        idx += 1;
+      }
+    }
+    return result;
   }
 
   public static String[] merge(String[]... arrays) {
@@ -224,14 +233,6 @@ public class ScalaCInvoker {
     return false;
   }
 
-//   JarOutput: {out}
-// Manifest: {manifest}
-// ScalacOpts: {scala_opts}
-// Plugins: {plugin_arg}
-// Classpath: {cp}
-// Files: {files}
-// EnableIjar: {enableijar}
-// ijarOutput: {ijar_out}
 // ijarCmdPath: {ijar_cmd_path}
   private static Field reporterField;
   static {
@@ -288,6 +289,10 @@ public class ScalaCInvoker {
         files);
 
       MainClass comp = new MainClass();
+      System.out.println("\n\n\n\nCompiler args:::");
+      for(String arg: compilerArgs) {
+        System.out.println("    " + arg);
+      }
       comp.process(compilerArgs);
 
       ConsoleReporter reporter = (ConsoleReporter) reporterField.get(comp);
@@ -295,8 +300,8 @@ public class ScalaCInvoker {
       if (reporter.hasErrors()) {
           // reportErrors(reporter);
           reporter.flush();
+          throw new RuntimeException("Build failed");
       } else {
-        // reportSuccess();
         String[] jarCreatorArgs = {
           "-m",
           manifestPath,
