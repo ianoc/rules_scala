@@ -131,12 +131,11 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     cp_resources = _add_resources_cmd(
       ctx, "{out}_tmp".format(out=ctx.outputs.jar.path)
       )
-    ijar_cmd = ""
+    ijar_output_path = ""
+    ijar_cmd_path = ""
     if buildijar:
-        ijar_cmd = "\n{ijar} {out} {ijar_out}".format(
-          ijar=ctx.file._ijar.path,
-          out=ctx.outputs.jar.path,
-          ijar_out=ctx.outputs.ijar.path)
+        ijar_output_path = ctx.outputs.ijar.path
+        ijar_cmd_path = ctx.file._ijar.path
 
     java_srcs = _java_filetype.filter(ctx.files.srcs)
     sources = _scala_filetype.filter(ctx.files.srcs) + java_srcs
@@ -144,7 +143,7 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     all_srcjars = set(srcjars + list(dep_srcjars))
     # look for any plugins:
     plugins = _collect_plugin_paths(ctx.attr.plugins)
-    plugin_arg = "Plugins: " + ",".join(list(plugins))
+    plugin_arg = ",".join(list(plugins))
 
     # Set up the args to pass to scalac because they can be too long for bash
     scalac_args_file = ctx.new_file(ctx.outputs.jar, ctx.label.name + "_scalac_args")  # noqa
@@ -157,19 +156,25 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     )
 
     scalac_args = """
-{out}
-{manifest}
-{scala_opts}
-{plugin_arg}
-{cp}
-{files}
+JarOutput: {out}
+Manifest: {manifest}
+ScalacOpts: {scala_opts}
+Plugins: {plugin_arg}
+Classpath: {cp}
+Files: {files}
+EnableIjar: {enableijar}
+ijarOutput: {ijar_out}
+ijarCmdPath: {ijar_cmd_path}
 """.format(
         out=ctx.outputs.jar.path,  # 0
         manifest=ctx.outputs.manifest.path,  # 1
-        scala_opts="ScalaOpts: " + ",".join(ctx.attr.scalacopts),  # 2
+        scala_opts=",".join(ctx.attr.scalacopts),  # 2
         plugin_arg=plugin_arg,  # 3
         cp=compiler_classpath,  # 4
         files=",".join([f.path for f in sources]),  # 5
+        enableijar=buildijar,
+        ijar_out=ijar_output_path,
+        ijar_cmd_path=ijar_cmd_path,
         )
     ctx.file_action(output=scalac_args_file, content=scalac_args)
     javac_sources_cmd = ""
@@ -229,21 +234,21 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     )
     ctx.file_action(output=argfile, content=scalac_args)
 
-    cmd = """
-  cat {scalac_args} > {out}_args/scala_args
-  {java} -jar {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
-  """ + ijar_cmd
-    cmd = cmd.format(
-        cp_resources=cp_resources,
-        java=ctx.file._java.path,
-        jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
-        scalac=_get_scalac_jar_path(ctx.files._scalac),
-        scalac_args=scalac_args_file.path,
-        out=ctx.outputs.jar.path,
-        manifest=ctx.outputs.manifest.path,
-        jar=_get_jar_path(ctx.files._jar),
-        ijar=ctx.file._ijar.path,
-      )
+  #   cmd = """
+  # cat {scalac_args} > {out}_args/scala_args
+  # {java} -jar {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
+  # """ + ijar_cmd
+  #   cmd = cmd.format(
+  #       cp_resources=cp_resources,
+  #       java=ctx.file._java.path,
+  #       jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
+  #       scalac=_get_scalac_jar_path(ctx.files._scalac),
+  #       scalac_args=scalac_args_file.path,
+  #       out=ctx.outputs.jar.path,
+  #       manifest=ctx.outputs.manifest.path,
+  #       jar=_get_jar_path(ctx.files._jar),
+  #       ijar=ctx.file._ijar.path,
+  #     )
 
     outs = [ctx.outputs.jar]
     if buildijar:

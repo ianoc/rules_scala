@@ -22,6 +22,7 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.TreeMap;
 import java.util.jar.Attributes;
 import java.util.jar.JarOutputStream;
@@ -183,53 +184,95 @@ public class ScalaCInvoker {
   //     processRequest(ImmutableList.copyOf(args));
   //   }
   // }
-  private static String getOptionalNamedArg(String line) {
-    String[] lSplit = line.split(" ");
-    if(lSplit.length > 1) {
-      return lSplit[1];
+  private static HashMap<String, String> buildArgMap(List<String> lines) {
+    HashMap hm = new HashMap();
+    for(String line: lines) {
+      String[] lSplit = line.split(" ");
+      if(lSplit.length > 2) {
+        throw new RuntimeException("Bad arg, should have at most 1 space/2 spans. arg: " + line);
+      }
+      if(lSplit.length > 1) {
+        hm.put(lSplit[0].substring(0, lSplit[0].length() - 1), lSplit[1]);
+      }
+    }
+    return hm;
+  }
+
+  private static String getOrError(Map<String, String> m, String k, String errorMessage) {
+    if(m.containsKey(k)) {
+      return m.get(k);
+    } else {
+      throw new RuntimeException(errorMessage);
+    }
+  }
+
+  private static String getOrEmpty(Map<String, String> m, String k) {
+    if(m.containsKey(k)) {
+      return m.get(k);
     } else {
       return "";
     }
   }
-  private static void processRequest(List<String> args) throws Exception {
-    System.out.println("\n\n\n___ARGS_START____\n");
 
-
-
-      for (int i = 0; i < args.size(); i++) {
-        System.out.println("'''" + args.get(i) + "'''");
+  private static boolean booleanGetOrFalse(Map<String, String> m, String k) {
+    if(m.containsKey(k)) {
+      String v = m.get(k);
+      if(v.trim().equals("True") || v.trim().equals("true")) {
+        return true;
       }
+    }
+    return false;
+  }
 
+//   JarOutput: {out}
+// Manifest: {manifest}
+// ScalacOpts: {scala_opts}
+// Plugins: {plugin_arg}
+// Classpath: {cp}
+// Files: {files}
+// EnableIjar: {enableijar}
+// ijarOutput: {ijar_out}
+// ijarCmdPath: {ijar_cmd_path}
+  private static Field reporterField;
+  static {
+    try {
+    reporterField = Driver.class.getDeclaredField("reporter"); //NoSuchFieldException
+    reporterField.setAccessible(true);
+    }
+    catch (Exception ex){
+    throw new RuntimeException("nope", ex);
+    }
+  }
+
+  private static void processRequest(List<String> args) throws Exception {
       if (args.size() == 1 && args.get(0).startsWith("@")) {
         args = Files.readAllLines(Paths.get(args.get(0).substring(1)), UTF_8);
       }
 
-      List<String> trimmedArgs = new ArrayList<String>();
-      for(String arg : args) {
-        if(arg.trim().length() > 0){
-          trimmedArgs.add(arg);
-        }
-      }
-      args = trimmedArgs;
-
-      for (int i = 0; i < args.size(); i++) {
-        System.out.println(args.get(i));
+      Map<String, String> argMap = buildArgMap(args);
+      for (Map.Entry<String, String> entry : argMap.entrySet()) {
+        System.out.println("Key = " + entry.getKey() + ", Value = " + entry.getValue());
       }
 
-      String outputName = args.get(0);
-      String manifestPath = args.get(1);
+      String outputName = getOrError(argMap, "JarOutput", "Missing required arg JarOutput");
+      String manifestPath = getOrError(argMap, "Manifest", "Missing required arg Manifest");
 
-      String[] scalaOpts = getOptionalNamedArg(args.get(2)).split(",");
-      String[] pluginArgs = buildPluginArgs(getOptionalNamedArg(args.get(3)));
-      String classpath = args.get(4);
-      String[] files = args.get(5).split(",");
+      String[] scalaOpts = getOrEmpty(argMap, "ScalacOpts").split(",");
+      String[] pluginArgs = buildPluginArgs(getOrEmpty(argMap, "Plugins"));
+      String classpath = getOrError(argMap, "Classpath", "Must supply the classpath arg");
+      String[] files = getOrError(argMap, "Files", "Must supply files to operate on").split(",");
+
+      boolean iJarEnabled = booleanGetOrFalse(argMap, "EnableIjar");
+      String ijarOutput = null;
+      String ijarCmdPath = null;
+      if(iJarEnabled) {
+       ijarOutput = getOrError(argMap, "ijarOutput", "Missing required arg ijarOutput when ijar enabled");
+       ijarCmdPath = getOrError(argMap, "ijarCmdPath", "Missing required arg ijarCmdPath when ijar enabled");
+      }
 
       Path outputPath = FileSystems.getDefault().getPath(outputName);
       Path tmpPath = Files.createTempDirectory(outputPath.getParent(),"tmp");
 
-      System.out.println("Output path will be: " + outputName);
-      System.out.println("Manifest path will be: " + manifestPath);
-      System.out.println("tmpPath path will be: " + tmpPath);
 
       String[] constParams = {
         "-classpath",
@@ -244,50 +287,34 @@ public class ScalaCInvoker {
         constParams,
         files);
 
+      MainClass comp = new MainClass();
+      comp.process(compilerArgs);
 
-      for (int i = 0; i < compilerArgs.length; i++) {
-      System.out.println(compilerArgs[i]);
+      ConsoleReporter reporter = (ConsoleReporter) reporterField.get(comp);
+
+      if (reporter.hasErrors()) {
+          // reportErrors(reporter);
+          reporter.flush();
+      } else {
+        // reportSuccess();
+        String[] jarCreatorArgs = {
+          "-m",
+          manifestPath,
+          outputPath.toString(),
+          tmpPath.toString()
+        };
+        JarCreator.buildJar(jarCreatorArgs);
+
+        if(iJarEnabled) {
+          Process iostat = new ProcessBuilder().command(ijarCmdPath, outputName, ijarOutput).inheritIO().start();
+          int exitCode = iostat.waitFor();
+          if(exitCode != 0) {
+            throw new RuntimeException("ijar process failed!");
+          }
+          System.out.println("exitCode = " + exitCode);
         }
-
-
-
-
-     //  System.out.println("\n\n___ARGS_END____\n");
-
-     // for (int i = 0; i < newArgs.length; i++) {
-     //  System.out.println(newArgs[i]);
-     //    }
-
-     //  System.out.println("SASDF");
-     //  System.out.println("SASDF");
-     //  System.out.println("SASDF");
-     //  System.out.println("SASDF");
-     //  System.out.println("SASDF");
-  MainClass comp = new MainClass();
-  comp.process(compilerArgs);
-
-
-  // System.out.println("SASDF");
-
-  Field f = Driver.class.getDeclaredField("reporter"); //NoSuchFieldException
-  f.setAccessible(true);
-  ConsoleReporter reporter = (ConsoleReporter) f.get(comp); //IllegalAccessException
-
-  if (reporter.hasErrors()) {
-      // reportErrors(reporter);
-      reporter.flush();
-  } else {
-    // reportSuccess();
-    String[] jarCreatorArgs = {
-      "-m",
-      manifestPath,
-      outputPath.toString(),
-      tmpPath.toString()
-    };
-    JarCreator.buildJar(jarCreatorArgs);
-
-    System.out.println("Success");
-  }
+        System.out.println("Success");
+      }
   }
 
   public static void main(String[] args) {
