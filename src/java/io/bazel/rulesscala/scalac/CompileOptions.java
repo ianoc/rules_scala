@@ -20,6 +20,7 @@ public class CompileOptions {
   final public String javacPath;
   final public String javacOpts;
   final public String jvmFlags;
+  final public Map<String, String> resourceFiles;
 
   public CompileOptions(List<String> args) {
     Map<String, String> argMap = buildArgMap(args);
@@ -47,6 +48,20 @@ public class CompileOptions {
       ijarOutput = null;
       ijarCmdPath = null;
     }
+    resourceFiles = getResources(argMap);
+  }
+
+  private static Map<String, String> getResources(Map<String, String> args) {
+    String[] keys = getCommaList(args, "ResourceSrcs");
+    String[] vals = getCommaList(args, "ResourceDests");
+    if (keys.length != vals.length)
+      throw new RuntimeException(String.format("mismatch in resources: keys: %s vals: %s",
+            getOrEmpty(args, "ResourceSrcs"), getOrEmpty(args, "ResourceDests")));
+    HashMap<String, String> res = new HashMap();
+    for(int idx = 0; idx < keys.length; idx++) {
+      res.put(keys[idx], vals[idx]);
+    }
+    return res;
   }
 
   private static HashMap<String, String> buildArgMap(List<String> lines) {

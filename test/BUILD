@@ -9,25 +9,25 @@ load("//scala:scala.bzl",
 # The examples below show how to combine Scala and Java rules.
 # ScalaBinary is the Scala equivalent of JavaBinary.
 
-# java_binary(
-#     name = "JavaBinary",
-#     srcs = ["JavaBinary.java"],
-#     main_class = "scala.test.JavaBinary",
-#     deps = [":lib_import"],
-# )
+java_binary(
+    name = "JavaBinary",
+    srcs = ["JavaBinary.java"],
+    main_class = "scala.test.JavaBinary",
+    deps = [":lib_import"],
+)
 
-# # TODO(bazel-team): Allow java rules to depend directly on scala_library.
-# # For now, we have to use a java_import proxy.
-# java_import(
-#     name = "lib_import",
-#     # these are the outputs of the scala_library targets
-#     jars = [":HelloLib_deploy.jar",
-#             "OtherLib_deploy.jar",
-#             "Exported_deploy.jar",
-#             "Runtime_deploy.jar",
-#            ],
-#     runtime_deps = ["org_scala_lang__scala_library", "OtherJavaLib"]
-# )
+# TODO(bazel-team): Allow java rules to depend directly on scala_library.
+# For now, we have to use a java_import proxy.
+java_import(
+    name = "lib_import",
+    # these are the outputs of the scala_library targets
+    jars = [":HelloLib_deploy.jar",
+            "OtherLib_deploy.jar",
+            "Exported_deploy.jar",
+            "Runtime_deploy.jar",
+           ],
+    runtime_deps = ["org_scala_lang__scala_library", "OtherJavaLib"]
+)
 
 scala_export_to_java(
     name = "lib_import_2",
