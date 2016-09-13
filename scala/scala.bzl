@@ -166,6 +166,10 @@ EnableIjar: {enableijar}
 ijarOutput: {ijar_out}
 ijarCmdPath: {ijar_cmd_path}
 SourceJars: {srcjars}
+JavacPath: {javac_path}
+JavacOpts: {javac_opts}
+JavaFiles: {java_files}
+JvmFlags: {jvm_flags}
 """.format(
         out=ctx.outputs.jar.path,  # 0
         manifest=ctx.outputs.manifest.path,  # 1
@@ -177,6 +181,10 @@ SourceJars: {srcjars}
         ijar_out=ijar_output_path,
         ijar_cmd_path=ijar_cmd_path,
         srcjars=",".join([f.path for f in all_srcjars]),
+        javac_opts=" ".join(ctx.attr.javacopts),
+        javac_path=ctx.file._javac.path,
+        java_files=",".join([f.path for f in java_srcs]),
+        jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
         )
     ctx.file_action(output=scalac_args_file, content=scalac_args)
     javac_sources_cmd = ""

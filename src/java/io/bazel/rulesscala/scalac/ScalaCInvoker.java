@@ -255,6 +255,37 @@ public class ScalaCInvoker {
           reporter.flush();
           throw new RuntimeException("Build failed");
       } else {
+        /**
+         * See if there are java sources to compile
+         */
+        if (ops.javaFiles.length > 0) {
+          StringBuilder cmd = new StringBuilder();
+          cmd.append(ops.javacPath);
+          if (ops.jvmFlags != "") cmd.append(ops.jvmFlags);
+          if (ops.javacOpts != "") cmd.append(ops.javacOpts);
+
+          StringBuilder files = new StringBuilder();
+          int cnt = 0;
+          for(String javaFile : ops.javaFiles) {
+            if (cnt > 0) files.append(" ");
+            files.append(javaFile);
+            cnt += 1;
+          }
+          Process iostat = new ProcessBuilder()
+            .command(cmd.toString(),
+                "-classpath", ops.classpath + ":" + tmpPath.toString(),
+                "-d", tmpPath.toString(),
+                files.toString())
+            .inheritIO()
+            .start();
+          int exitCode = iostat.waitFor();
+          if(exitCode != 0) {
+            throw new RuntimeException("javac process failed!");
+          }
+        }
+        /**
+         * Now build the output jar
+         */
         String[] jarCreatorArgs = {
           "-m",
           ops.manifestPath,
@@ -263,6 +294,9 @@ public class ScalaCInvoker {
         };
         JarCreator.buildJar(jarCreatorArgs);
 
+        /**
+         * Now build the output ijar
+         */
         if(ops.iJarEnabled) {
           Process iostat = new ProcessBuilder()
             .command(ops.ijarCmdPath, ops.outputName, ops.ijarOutput)
