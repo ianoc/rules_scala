@@ -31,10 +31,13 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.lang.reflect.Field;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.FileSystems;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -222,13 +225,15 @@ public class ScalaCInvoker {
   }
 
   private static void processRequest(List<String> args) throws Exception {
+    Path tmpPath = null;
+    try {
       if (args.size() == 1 && args.get(0).startsWith("@")) {
         args = Files.readAllLines(Paths.get(args.get(0).substring(1)), UTF_8);
       }
       CompileOptions ops = new CompileOptions(args);
 
       Path outputPath = FileSystems.getDefault().getPath(ops.outputName);
-      Path tmpPath = Files.createTempDirectory(outputPath.getParent(), "tmp");
+      tmpPath = Files.createTempDirectory(outputPath.getParent(), "tmp");
       String[] constParams = {
         "-classpath",
         ops.classpath,
@@ -284,6 +289,10 @@ public class ScalaCInvoker {
           }
         }
         /**
+         * Copy the resources
+         */
+        copyResources(ops.resourceFiles, tmpPath);
+        /**
          * Now build the output jar
          */
         String[] jarCreatorArgs = {
@@ -306,10 +315,40 @@ public class ScalaCInvoker {
           if(exitCode != 0) {
             throw new RuntimeException("ijar process failed!");
           }
-          // System.out.println("exitCode = " + exitCode);
         }
-        // System.out.println("Success");
       }
+    }
+    finally {
+      removeTmp(tmpPath);
+    }
+  }
+  private static void removeTmp(Path tmp) throws IOException {
+    if (tmp != null) {
+      Files.walkFileTree(tmp, new SimpleFileVisitor<Path>() {
+         @Override
+         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException {
+             Files.delete(file);
+             return FileVisitResult.CONTINUE;
+         }
+
+         @Override
+         public FileVisitResult postVisitDirectory(Path dir, IOException exc) throws IOException {
+             Files.delete(dir);
+             return FileVisitResult.CONTINUE;
+         }
+      });
+    }
+  }
+  private static void copyResources(Map<String, String> resources, Path dest) throws IOException {
+    for(Entry<String, String> e : resources.entrySet()) {
+      Path source = Paths.get(e.getKey());
+      String dstr = e.getValue();
+      if (dstr.charAt(0) == '/') dstr = dstr.substring(1);
+      Path target = dest.resolve(dstr);
+      File tfile = target.getParent().toFile();
+      tfile.mkdirs();
+      Files.copy(source, target);
+    }
   }
 
   public static void main(String[] args) {

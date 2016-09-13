@@ -128,9 +128,6 @@ def _collect_plugin_paths(plugins):
 
 def _compile(ctx, _jars, dep_srcjars, buildijar):
     jars = _jars
-    cp_resources = _add_resources_cmd(
-      ctx, "{out}_tmp".format(out=ctx.outputs.jar.path)
-      )
     ijar_output_path = ""
     ijar_cmd_path = ""
     if buildijar:
@@ -144,9 +141,6 @@ def _compile(ctx, _jars, dep_srcjars, buildijar):
     # look for any plugins:
     plugins = _collect_plugin_paths(ctx.attr.plugins)
     plugin_arg = ",".join(list(plugins))
-
-    # Set up the args to pass to scalac because they can be too long for bash
-    scalac_args_file = ctx.new_file(ctx.outputs.jar, ctx.label.name + "_scalac_args")  # noqa
 
     compiler_classpath = '{scalalib}:{scalacompiler}:{scalareflect}:{jars}'.format(  # noqa
         scalalib=ctx.file._scalalib.path,
@@ -170,6 +164,8 @@ JavacPath: {javac_path}
 JavacOpts: {javac_opts}
 JavaFiles: {java_files}
 JvmFlags: {jvm_flags}
+ResourceSrcs: {resource_src}
+ResourceDests: {resource_dest}
 """.format(
         out=ctx.outputs.jar.path,  # 0
         manifest=ctx.outputs.manifest.path,  # 1
@@ -185,80 +181,15 @@ JvmFlags: {jvm_flags}
         javac_path=ctx.file._javac.path,
         java_files=",".join([f.path for f in java_srcs]),
         jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
+        resource_src=",".join([f.path for f in ctx.files.resources]),
+        resource_dest=",".join([_adjust_resources_path(f.path)[1] for f in ctx.files.resources]),
         )
-    ctx.file_action(output=scalac_args_file, content=scalac_args)
-    javac_sources_cmd = ""
-    compile_java_srcs = len(java_srcs) != 0
-    if (compile_java_srcs):
-        # Set up the args to pass to javac because they can be
-        # too long for bash
-        javac_args_file = ctx.new_file(
-          ctx.outputs.jar,
-          ctx.label.name + "_javac_args")
-
-        javac_args = """{javac_opts} -classpath "{jars}:{out}_tmp" -d {out}_tmp {files}""".format( # noqa
-            javac_opts=" ".join(ctx.attr.javacopts),
-            jars=":".join([j.path for j in jars]),
-            files=" ".join([f.path for f in java_srcs]),
-            out=ctx.outputs.jar.path
-            )
-        ctx.file_action(output=javac_args_file, content=javac_args)
-        javac_sources_cmd = """
-        cat {javac_args} {{out}}_args/files_from_jar > {{out}}_args/java_args
-        {javac} {{jvm_flags}} @{{out}}_args/java_args""".format(
-          javac_args=javac_args_file.path,
-          javac=ctx.file._javac.path
-          )
-
-    # srcjar_cmd = ""
-    # if len(all_srcjars) > 0:
-    #     srcjar_cmd = "\nmkdir -p {out}_tmp_expand_srcjars\n"
-    #     for srcjar in all_srcjars:
-    #         #  Note: this is double escaped because
-    #         #  we need to do one format call
-    #         #  per each srcjar, but then we are going to include
-    #         #  this in the bigger format
-    #         #  call that is done to generate the full command
-
-    #         # TODO would like to be able to switch >/dev/null, -v,
-    #         # etc based on the user's settings
-    #         srcjar_cmd += """
-    #           unzip -o {srcjar} -d {{out}}_tmp_expand_srcjars >/dev/null
-    #           """.format(
-    #                     srcjar=srcjar.path)
-    #         srcjar_cmd += """find {out}_tmp_expand_srcjars """
-    #         srcjar_cmd += """-type f -name "*.scala"""
-    #         srcjar_cmd += """ > {out}_args/files_from_jar\n"""
-# TODO ADD RESOURCES SUPPORT!
-#  # add any resources
-#  {cp_resources}
-
-# TODO add source jar support
-#   touch {out}_args/files_from_jar
-#   mkdir -p {out}_tmp""" + srcjar_cmd + """
-# {out}_args/files_from_jar
-
+    # TODO why this path here?
     argfile = ctx.new_file(
       ctx.configuration.bin_dir,
       "%s_worker_input" % ctx.label.name
     )
     ctx.file_action(output=argfile, content=scalac_args)
-
-  #   cmd = """
-  # cat {scalac_args} > {out}_args/scala_args
-  # {java} -jar {scalac} {jvm_flags} @{out}_args/scala_args""" + javac_sources_cmd + """
-  # """ + ijar_cmd
-  #   cmd = cmd.format(
-  #       cp_resources=cp_resources,
-  #       java=ctx.file._java.path,
-  #       jvm_flags=" ".join(["-J" + flag for flag in ctx.attr.jvm_flags]),
-  #       scalac=_get_scalac_jar_path(ctx.files._scalac),
-  #       scalac_args=scalac_args_file.path,
-  #       out=ctx.outputs.jar.path,
-  #       manifest=ctx.outputs.manifest.path,
-  #       jar=_get_jar_path(ctx.files._jar),
-  #       ijar=ctx.file._ijar.path,
-  #     )
 
     outs = [ctx.outputs.jar]
     if buildijar:
@@ -271,20 +202,14 @@ JvmFlags: {jvm_flags}
            ctx.files.plugins +
            ctx.files.resources +
            ctx.files._jdk +
-           ctx.files._scalac +
-           ctx.files._jar +
            ctx.files._scalasdk +
            [ctx.outputs.manifest,
             ctx.file._ijar,
             ctx.file._java,
-            scalac_args_file,
             argfile])
-    if compile_java_srcs:
-        ins.extend([javac_args_file])
     ctx.action(
         inputs=ins,
         outputs=outs,
-        # command=cmd,
         executable=ctx.executable._scalac,
         mnemonic="Scalac",
         progress_message="scala %s" % ctx.label,
