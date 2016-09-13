@@ -16,6 +16,10 @@ public class CompileOptions {
   final public boolean iJarEnabled;
   final public String ijarOutput;
   final public String ijarCmdPath;
+  final public String[] javaFiles;
+  final public String javacPath;
+  final public String javacOpts;
+  final public String jvmFlags;
 
   public CompileOptions(List<String> args) {
     Map<String, String> argMap = buildArgMap(args);
@@ -23,12 +27,17 @@ public class CompileOptions {
     outputName = getOrError(argMap, "JarOutput", "Missing required arg JarOutput");
     manifestPath = getOrError(argMap, "Manifest", "Missing required arg Manifest");
 
-    scalaOpts = getOrEmpty(argMap, "ScalacOpts").split(",");
+    scalaOpts = getCommaList(argMap, "ScalacOpts");
     pluginArgs = buildPluginArgs(getOrEmpty(argMap, "Plugins"));
     classpath = getOrError(argMap, "Classpath", "Must supply the classpath arg");
-    files = getOrEmpty(argMap, "Files").split(",");
+    files = getCommaList(argMap, "Files");
 
-    sourceJars = getOrEmpty(argMap, "SourceJars").split(",");
+    javaFiles = getCommaList(argMap, "JavaFiles");
+    javacPath = getOrEmpty(argMap, "JavacPath");
+    javacOpts = getOrEmpty(argMap, "JavacOpts");
+    jvmFlags = getOrEmpty(argMap, "JvmFlags");
+
+    sourceJars = getCommaList(argMap, "SourceJars");
     iJarEnabled = booleanGetOrFalse(argMap, "EnableIjar");
     if(iJarEnabled) {
      ijarOutput = getOrError(argMap, "ijarOutput", "Missing required arg ijarOutput when ijar enabled");
@@ -54,6 +63,20 @@ public class CompileOptions {
     return hm;
   }
 
+  private static String[] getCommaList(Map<String, String> m, String k) {
+    if(m.containsKey(k)) {
+      String v = m.get(k);
+      if (v == "") {
+        return new String[]{};
+      }
+      else {
+        return v.split(",");
+      }
+    } else {
+      return new String[]{};
+    }
+  }
+
   private static String getOrEmpty(Map<String, String> m, String k) {
     if(m.containsKey(k)) {
       return m.get(k);
@@ -61,6 +84,7 @@ public class CompileOptions {
       return "";
     }
   }
+
   private static String getOrError(Map<String, String> m, String k, String errorMessage) {
     if(m.containsKey(k)) {
       return m.get(k);
